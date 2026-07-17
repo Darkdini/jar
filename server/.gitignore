@@ -1,2 +1,6 @@
 out/
 *.class
+
+# built/modified APK artifacts (delivered via chat, not source)
+*.apk
+*.keystore
