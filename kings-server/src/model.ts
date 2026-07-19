@@ -32,8 +32,23 @@ export interface Castle {
   id: string;
   ownerId: string;
   name: string;
+  x: number; // world-map coordinate
+  y: number;
   levels: Record<string, number>; // building code -> level (0 = not built)
-  army: Record<string, number>; // unit code -> count
+  army: Record<string, number>; // unit code -> count (garrison)
   stock: Resources; // current wood/stone/iron/food/gold
   lastUpdate: number; // epoch ms
+}
+
+/** An army moving between castles (see world.ts). */
+export type MoveKind = "attack" | "support" | "return";
+export interface Movement {
+  id: string;
+  fromId: string;
+  toId: string;
+  kind: MoveKind;
+  army: Record<string, number>;
+  loot?: Resources; // carried back on return
+  departAt: number; // epoch ms
+  arriveAt: number; // epoch ms
 }

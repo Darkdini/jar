@@ -16,6 +16,8 @@ function foundCastle(ownerId: string, name: string): Castle {
     id: randomUUID().slice(0, 8),
     ownerId,
     name,
+    x: 400 + Math.floor(Math.random() * 200),
+    y: 400 + Math.floor(Math.random() * 200),
     levels: startingLevels(),
     army: {},
     stock: { ...zeroResources(), wood: 500, stone: 500, iron: 500, food: 500 },
