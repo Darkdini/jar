@@ -1,5 +1,6 @@
 // Authoritative economy engine (see design/DESIGN.md §2-3).
 import { BUILDINGS } from "./buildings.js";
+import { UNITS } from "./units.js";
 import { STORABLE, type Castle, type Resources, type ResourceKey } from "./model.js";
 
 // --- tunable constants (starter Travian-style values) ---
@@ -44,6 +45,24 @@ export function popCap(c: Castle): number {
   return cap;
 }
 
+/** Population currently used by the army. */
+export function popUsed(c: Castle): number {
+  let used = 0;
+  for (const [code, n] of Object.entries(c.army ?? {})) {
+    used += (UNITS[code]?.pop ?? 0) * n;
+  }
+  return used;
+}
+
+/** Total food eaten per hour by the army. */
+export function foodUpkeep(c: Castle): number {
+  let up = 0;
+  for (const [code, n] of Object.entries(c.army ?? {})) {
+    up += (UNITS[code]?.upkeep ?? 0) * n;
+  }
+  return up;
+}
+
 /** Cost of upgrading `code` from its current level to the next. */
 export function upgradeCost(c: Castle, code: string): Resources {
   const def = BUILDINGS[code];
@@ -68,9 +87,12 @@ export function update(c: Castle, now = Date.now()): void {
   const prod = productionPerHour(c);
   const cap = storageCapacity(c);
   for (const r of STORABLE) {
+    if (r === "food") continue;
     c.stock[r] = Math.min(cap, c.stock[r] + prod[r] * dtHours);
   }
-  // TODO: subtract army/population food upkeep once units exist.
+  // Food: production minus army upkeep (can go negative = starving).
+  const netFood = (prod.food - foodUpkeep(c)) * dtHours;
+  c.stock.food = Math.min(cap, c.stock.food + netFood);
   c.lastUpdate = now;
 }
 
@@ -90,4 +112,23 @@ export function build(c: Castle, code: string, now = Date.now()): BuildResult {
   for (const r of STORABLE) c.stock[r] -= cost[r];
   c.levels[code] = current + 1;
   return { ok: true, newLevel: c.levels[code] };
+}
+
+export type TrainResult = { ok: true; count: number } | { ok: false; reason: string };
+
+/** Train `n` of a unit: settle economy, check building/pop/cost, deduct, add. */
+export function train(c: Castle, unitCode: string, n: number, now = Date.now()): TrainResult {
+  const def = UNITS[unitCode];
+  if (!def) return { ok: false, reason: "unknown_unit" };
+  if (n <= 0) return { ok: false, reason: "bad_count" };
+  update(c, now);
+  if (lvl(c, def.building) < def.buildingMin) return { ok: false, reason: "need_building" };
+  if (popUsed(c) + def.pop * n > popCap(c)) return { ok: false, reason: "not_enough_population" };
+  for (const r of STORABLE) {
+    const need = (def.cost[r] ?? 0) * n;
+    if (need > 0 && c.stock[r] < need) return { ok: false, reason: `not_enough_${r}` };
+  }
+  for (const r of STORABLE) c.stock[r] -= (def.cost[r] ?? 0) * n;
+  c.army[unitCode] = (c.army[unitCode] ?? 0) + n;
+  return { ok: true, count: c.army[unitCode] };
 }

@@ -7,7 +7,7 @@ import net from "node:net";
 import { randomUUID } from "node:crypto";
 import { startingLevels } from "./buildings.js";
 import { zeroResources, STORABLE, type Castle } from "./model.js";
-import { build, popCap, productionPerHour, storageCapacity, update, upgradeCost } from "./economy.js";
+import { build, foodUpkeep, popCap, popUsed, productionPerHour, storageCapacity, train, update, upgradeCost } from "./economy.js";
 
 const world = new Map<string, Castle>(); // castleId -> Castle
 
@@ -17,6 +17,7 @@ function foundCastle(ownerId: string, name: string): Castle {
     ownerId,
     name,
     levels: startingLevels(),
+    army: {},
     stock: { ...zeroResources(), wood: 500, stone: 500, iron: 500, food: 500 },
     lastUpdate: Date.now(),
   };
@@ -33,7 +34,9 @@ function stateOf(c: Castle) {
     stock: Object.fromEntries(STORABLE.map((r) => [r, Math.round(c.stock[r])])),
     production: Object.fromEntries(STORABLE.map((r) => [r, Math.round(productionPerHour(c)[r])])),
     storageCap: Math.round(storageCapacity(c)),
-    popCap: popCap(c),
+    army: c.army,
+    pop: { used: popUsed(c), cap: popCap(c) },
+    foodUpkeep: Math.round(foodUpkeep(c)),
   };
 }
 
@@ -52,6 +55,12 @@ function handle(cmd: any): any {
       const cost = upgradeCost(c, cmd.code);
       const res = build(c, cmd.code);
       return res.ok ? { ok: true, code: cmd.code, level: res.newLevel, cost, castle: stateOf(c) } : { ok: false, reason: res.reason };
+    }
+    case "train": {
+      const c = world.get(cmd.id);
+      if (!c) return { ok: false, reason: "no_castle" };
+      const res = train(c, cmd.unit, cmd.n ?? 1);
+      return res.ok ? { ok: true, unit: cmd.unit, count: res.count, castle: stateOf(c) } : { ok: false, reason: res.reason };
     }
     default:
       return { ok: false, reason: "unknown_op" };

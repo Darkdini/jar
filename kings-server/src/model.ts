@@ -27,12 +27,13 @@ export interface BuildingDef {
   housing?: number;
 }
 
-/** A player's castle: which buildings at which level, plus current stock. */
+/** A player's castle: which buildings at which level, army, and current stock. */
 export interface Castle {
   id: string;
   ownerId: string;
   name: string;
   levels: Record<string, number>; // building code -> level (0 = not built)
+  army: Record<string, number>; // unit code -> count
   stock: Resources; // current wood/stone/iron/food/gold
   lastUpdate: number; // epoch ms
 }
