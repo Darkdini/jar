@@ -59,20 +59,55 @@ public final class TestClient {
             System.out.println("PASS: server switched client to the game canvas");
 
             // 10. Optionally the resources packet (ch2 family10 sub6).
+            // 11. Drain the post-enter packets (resources + map), decoding the
+            //     map exactly like the client's k.a(d) case 10/1 does.
             s.setSoTimeout(1500);
             try {
-                Flap.Message res = Flap.read(in);
-                if (res.family == 10 && res.subtype == 6) {
-                    System.out.println("PASS: received resources packet (" + res.data.length + "B)");
-                } else {
-                    System.out.println("INFO: extra packet " + res);
+                while (true) {
+                    Flap.Message pkt = Flap.read(in);
+                    if (pkt.family == 10 && pkt.subtype == 6) {
+                        System.out.println("PASS: received resources packet (" + pkt.data.length + "B)");
+                    } else if (pkt.family == 10 && pkt.subtype == 1) {
+                        System.out.println("PASS: received map packet (" + pkt.data.length + "B)");
+                        decodeAndPrintMap(pkt.data);
+                    } else {
+                        System.out.println("INFO: extra packet " + pkt);
+                    }
                 }
             } catch (java.net.SocketTimeoutException e) {
-                System.out.println("INFO: no resources packet (ok, client has defaults)");
+                // no more packets
             }
 
             System.out.println();
             System.out.println("SUCCESS: unmodified-client handshake reaches the game world.");
+        }
+    }
+
+    /** Decode a fam10/sub1 map payload the way k.a(d) does, print the 7x7 grid. */
+    private static void decodeAndPrintMap(byte[] data) {
+        int mapId = -1;
+        byte[] tiles = null;
+        for (Flap.Tlv t : Flap.parseTlvs(data)) {
+            if (t.type == 8) mapId = t.value[0] & 0xFF;
+            else if (t.type == 9) tiles = t.value;
+        }
+        String[] names = { "castle", "storage", "mbase", "barracks", "market",
+                "farm", "house", "sawmill", "quarry", "iron" };
+        System.out.println("      mapId=" + mapId + " (0=home) tiles=" + (tiles == null ? 0 : tiles.length));
+        if (mapId == 0 && tiles != null && tiles.length >= 49) {
+            for (int row = 0; row < 7; row++) {
+                StringBuilder sb = new StringBuilder("      ");
+                for (int col = 0; col < 7; col++) {
+                    int v = tiles[row * 7 + col];
+                    sb.append(v < 0 ? " .. " : String.format("%3d ", v));
+                }
+                System.out.println(sb.toString());
+            }
+            for (int i = 0; i < 49; i++) {
+                int v = tiles[i];
+                if (v >= 0 && v < names.length)
+                    System.out.println("      [" + (i / 7) + "][" + (i % 7) + "] = " + names[v]);
+            }
         }
     }
 

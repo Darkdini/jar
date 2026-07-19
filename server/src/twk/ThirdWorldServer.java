@@ -201,12 +201,44 @@ public final class ThirdWorldServer {
                 if (sendResources) {
                     send(Flap.CH_GAME, FAM_GAME, SUB_GAME_RES, buildResources());
                 }
+                // Push the home map so the client renders a populated world
+                // instead of its built-in default.
+                send(Flap.CH_GAME, FAM_GAME, SUB_GAME_MAP, buildHomeMap());
                 log("[" + who + "] user \"" + login + "\" is in the game world");
             } else {
                 log("[" + who + "] game family=" + m.family + " subtype=" + m.subtype
                         + " (not implemented, ignored)");
             }
         }
+    }
+
+    /**
+     * Build a fam10/sub1 home-map payload, parsed by k.a(d) case 10/1:
+     *   TLV 8: mapId (0 = home 7x7)
+     *   TLV 7: flag (1 = make this the current map)
+     *   TLV 9: 49 bytes, building index per cell (row*7+col); -1 = empty.
+     * Building indices match the client's c[] image array (0=castle,1=storage,
+     * 3=barracks,4=market,5=farm,6=house,7=sawmill,8=quarry,9=ironmine,...).
+     */
+    private static byte[] buildHomeMap() {
+        byte[] tiles = new byte[49];
+        java.util.Arrays.fill(tiles, (byte) -1); // empty grass
+        // row*7 + col
+        tiles[3 * 7 + 3] = 0; // castle (center)
+        tiles[3 * 7 + 2] = 1; // storage
+        tiles[2 * 7 + 3] = 3; // barracks
+        tiles[4 * 7 + 3] = 4; // market
+        tiles[2 * 7 + 2] = 7; // sawmill (wood)
+        tiles[4 * 7 + 4] = 8; // quarry (stone)
+        tiles[2 * 7 + 4] = 9; // iron mine
+        tiles[4 * 7 + 2] = 5; // farm (food)
+        tiles[3 * 7 + 4] = 6; // house
+
+        ByteArrayOutputStream data = new ByteArrayOutputStream();
+        Flap.tlv(data, 8, new byte[] { 0 }); // mapId = home
+        Flap.tlv(data, 7, new byte[] { 1 }); // flag i3 = 1 (current map)
+        Flap.tlv(data, 9, tiles);            // tile/building array
+        return data.toByteArray();
     }
 
     /**
